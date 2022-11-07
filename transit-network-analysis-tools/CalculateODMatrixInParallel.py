@@ -385,7 +385,7 @@ class ODCostMatrixSolver:  # pylint: disable=too-many-instance-attributes, too-f
             while process.poll() is None:
                 output = process.stdout.readline()
                 if output:
-                    msg_string = output.strip().decode()
+                    msg_string = output.strip().decode(encoding="utf-8")
                     AnalysisHelpers.parse_std_and_write_to_gp_ui(msg_string)
                 time.sleep(.1)
 
@@ -394,7 +394,7 @@ class ODCostMatrixSolver:  # pylint: disable=too-many-instance-attributes, too-f
             # messages from raised exceptions, especially those with tracebacks.
             output, _ = process.communicate()
             if output:
-                out_msgs = output.decode().splitlines()
+                out_msgs = output.decode(encoding="utf-8").splitlines()
                 for msg in out_msgs:
                     AnalysisHelpers.parse_std_and_write_to_gp_ui(msg)
 

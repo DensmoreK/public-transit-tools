@@ -543,7 +543,7 @@ class ODCostMatrix:  # pylint:disable = too-many-instance-attributes
         """
         logger_obj.setLevel(logging.DEBUG)
         if len(logger_obj.handlers) <= 1:
-            file_handler = logging.FileHandler(self.log_file)
+            file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
             file_handler.setLevel(logging.DEBUG)
             logger_obj.addHandler(file_handler)
             formatter = logging.Formatter("%(process)d | %(message)s")

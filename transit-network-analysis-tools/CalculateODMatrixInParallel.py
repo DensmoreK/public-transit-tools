@@ -1,7 +1,7 @@
 ############################################################################
 ## Tool name: Transit Network Analysis Tools
 ## Created by: Melinda Morang, Esri
-## Last updated: 3 May 2022
+## Last updated: 24 January 2023
 ############################################################################
 """Calculate an OD Cost Matrix in parallel.
 
@@ -35,7 +35,7 @@ parallel. It was built based off Esri's Solve Large OD Cost Matrix sample script
 available from https://github.com/Esri/large-network-analysis-tools under an Apache
 2.0 license.
 
-Copyright 2022 Esri
+Copyright 2023 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -110,15 +110,7 @@ class ODCostMatrixSolver:  # pylint: disable=too-many-instance-attributes, too-f
         self.time_increment = time_increment
 
         # Check if origins and destinations are the same. We can skip certain steps if so.
-        # The origins and destinations can be either catalog paths or layers. If they are catalog paths, compare them
-        # directly. If they are layers, they are only equal if both their dataSources and layer names are the same. It
-        # is conceivable that someone might have two layers referencing the same data that each have a different
-        # selection set or definition query, and those should not be considered the same.
-        origins_catalog = self.origins.dataSource if hasattr(self.origins, "dataSource") else self.origins
-        dests_catalog = self.destinations.dataSource if hasattr(self.destinations, "dataSource") else self.destinations
-        origins_name = self.origins.name if hasattr(self.origins, "name") else self.origins
-        dests_name = self.destinations.name if hasattr(self.destinations, "name") else self.destinations
-        self.same_origins_destinations = bool(origins_catalog == dests_catalog) and bool(origins_name == dests_name)
+        self.same_origins_destinations = AnalysisHelpers.are_input_layers_the_same(self.origins, self.destinations)
 
         self.max_origins = self.chunk_size
         self.max_destinations = self.chunk_size
@@ -140,6 +132,13 @@ class ODCostMatrixSolver:  # pylint: disable=too-many-instance-attributes, too-f
             raise ValueError(err)
         if self.max_processes < 1:
             err = "Maximum allowed parallel processes must be greater than 0."
+            arcpy.AddError(err)
+            raise ValueError(err)
+        if self.max_processes > AnalysisHelpers.MAX_ALLOWED_MAX_PROCESSES:
+            err = (
+                f"The maximum allowed parallel processes cannot exceed {AnalysisHelpers.MAX_ALLOWED_MAX_PROCESSES:} "
+                "due to limitations imposed by Python's concurrent.futures module."
+            )
             arcpy.AddError(err)
             raise ValueError(err)
         if self.time_increment <= 0:
@@ -424,7 +423,11 @@ class ODCostMatrixSolver:  # pylint: disable=too-many-instance-attributes, too-f
 
     def solve_large_od_cost_matrix(self):
         """Solve the large OD Cost Matrix in parallel."""
+        # Set the progressor so the user is informed of progress
+        arcpy.SetProgressor("default")
+
         try:
+            arcpy.SetProgressorLabel("Validating inputs...")
             self._validate_inputs()
             arcpy.AddMessage("Inputs successfully validated.")
         except Exception:  # pylint: disable=broad-except
@@ -432,9 +435,12 @@ class ODCostMatrixSolver:  # pylint: disable=too-many-instance-attributes, too-f
             return
 
         # Preprocess inputs
+        arcpy.SetProgressorLabel("Preprocessing inputs...")
         self._preprocess_inputs()
+        arcpy.AddMessage("Inputs successfully preprocessed.")
 
         # Solve the analysis
+        arcpy.SetProgressorLabel("Solving analysis in parallel...")
         self._execute_solve()
 
         # Clean up

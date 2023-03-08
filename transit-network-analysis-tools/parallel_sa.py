@@ -236,9 +236,11 @@ class ServiceArea:  # pylint:disable = too-many-instance-attributes
             try:
                 setattr(self.sa_solver, prop, SA_PROPS[prop])
             except Exception as ex:  # pylint: disable=broad-except
-                # Suppress warnings for search tolerance for older services (pre 11.0) that don't support locate
-                # settings because we don't want the tool to always throw a warning.
-                if not (self.is_service and prop in ["searchTolerance", "searchToleranceUnits"]):
+                # Suppress warnings for older services (pre 11.0) that don't support locate settings and services
+                # that don't support accumulating attributes because we don't want the tool to always throw a warning.
+                if not (self.is_service and prop in [
+                    "searchTolerance", "searchToleranceUnits", "accumulateAttributeNames"
+                ]):
                     self.logger.warning(
                         f"Failed to set property {prop} from SA config file. Default will be used instead.")
                     self.logger.warning(str(ex))
@@ -387,6 +389,12 @@ class ServiceArea:  # pylint:disable = too-many-instance-attributes
             file_handler.setFormatter(formatter)
             logger_obj.addHandler(file_handler)
 
+    def teardown_logger(self):
+        """Clean up and close the logger."""
+        for handler in self.logger.handlers:
+            handler.close()
+            self.logger.removeHandler(handler)
+
 
 def solve_service_area(inputs, time_of_day):
     """Solve a Service Area analysis for the given time of day.
@@ -403,6 +411,7 @@ def solve_service_area(inputs, time_of_day):
         f"Processing start time {time_of_day} as job id {sa.job_id}"
     ))
     sa.solve(time_of_day)
+    sa.teardown_logger()
     return sa.job_result
 
 
@@ -504,6 +513,7 @@ class ParallelSACalculator():
         finally:
             if sa:
                 LOGGER.debug("Deleting temporary test Service Area job folder...")
+                sa.teardown_logger()
                 shutil.rmtree(sa.job_result["jobFolder"], ignore_errors=True)
                 del sa
 
@@ -668,11 +678,18 @@ def launch_parallel_sa():
     args = vars(parser.parse_args())
 
     # Initialize a parallel Service Area calculator class
-    sa_calculator = ParallelSACalculator(**args)
-    # Solve the Service Area in parallel chunks
-    start_time = time.time()
-    sa_calculator.solve_sa_in_parallel()
-    LOGGER.info(f"Parallel Service Area calculation completed in {round((time.time() - start_time) / 60, 2)} minutes")
+    try:
+        sa_calculator = ParallelSACalculator(**args)
+        # Solve the Service Area in parallel chunks
+        start_time = time.time()
+        sa_calculator.solve_sa_in_parallel()
+        LOGGER.info(
+            f"Parallel Service Area calculation completed in {round((time.time() - start_time) / 60, 2)} minutes")
+    except Exception:  # pylint: disable=broad-except
+        errs = traceback.format_exc().splitlines()
+        for err in errs:
+            LOGGER.error(err)
+        raise
 
 
 if __name__ == "__main__":

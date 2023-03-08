@@ -142,6 +142,11 @@ def parallel_counter(time_lapse_polygons, raster_template, scratch_folder, combo
     logger.info(f"Finished dissolve in {time.time() - t0} seconds.")
     job_result["polygons"] = dissolved_polygons
 
+    # Clean up and close the logger.
+    for handler in logger.handlers:
+        handler.close()
+        logger.removeHandler(handler)
+
     return job_result
 
 
@@ -263,7 +268,14 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     # Count intersecting percent access polygon cells in parallel
-    start_time = time.time()
-    count_percent_access_polygons(**args)
-    run_time = round((time.time() - start_time) / 60, 2)
-    LOGGER.info(f"Parallel percent access polygon cell calculation completed in {run_time} minutes")
+    try:
+        start_time = time.time()
+        count_percent_access_polygons(**args)
+        run_time = round((time.time() - start_time) / 60, 2)
+        LOGGER.info(f"Parallel percent access polygon cell calculation completed in {run_time} minutes")
+
+    except Exception:  # pylint: disable=broad-except
+        errs = traceback.format_exc().splitlines()
+        for err in errs:
+            LOGGER.error(err)
+        raise

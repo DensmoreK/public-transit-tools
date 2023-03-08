@@ -1,11 +1,11 @@
 ################################################################################
 ## Toolbox: Transit Network Analysis Tools
 ## Created by: Melinda Morang, Esri
-## Last updated: 16 June 2022
+## Last updated: 24 January 2023
 ################################################################################
 """Helper methods for analysis tools."""
 ################################################################################
-"""Copyright 2022 Esri
+"""Copyright 2023 Esri
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -24,11 +24,13 @@ import arcpy
 
 # Determine if this is python 3 (which means probably ArcGIS Pro)
 isPy3 = sys.version_info > (3, 0)
+arcgis_version = arcpy.GetInstallInfo()["Version"]
 
 # Set some shared global variables that can be referenced from the other scripts
 MSG_STR_SPLITTER = " | "
 TIME_UNITS = ["Days", "Hours", "Minutes", "Seconds"]
 MAX_AGOL_PROCESSES = 4  # AGOL concurrent processes are limited so as not to overload the service for other users.
+MAX_ALLOWED_MAX_PROCESSES = 61  # Windows limitation for concurrent.futures ProcessPoolExecutor
 TIME_FIELD = "TimeOfDay"  # Used for the output of Prepare Time Lapse Polygons
 # Create Percent Access Polygons: Field names that must be in the input time lapse polygons
 FACILITY_ID_FIELD = "FacilityID"
@@ -217,6 +219,36 @@ def get_catalog_path_from_param(param):
         return param.value.dataSource
     else:
         return param.valueAsText
+
+
+def are_input_layers_the_same(input_layer_1, input_layer_2):
+    """Determine whether two input layers are actually the same layer.
+
+    This is used, for example, to determine if the layers the user has passed in to the Origins and Destinations
+    parameters are actually the same layers.
+
+    Layer equivalency is not completely straightforward.  The value retrieved from parameter.value for a Feature Layer
+    parameter may be a layer object (if the input is a layer object/file/name), a record set object (if the input is a
+    feature set), or a GP value object (if the input is a catalog path).  This function
+    """
+    def get_layer_repr(lyr):
+        """Get the unique representation of the layer according to its type."""
+        if hasattr(lyr, "URI"):
+            # The input is a layer.  The URI property uniquely defines the layer in the map and in memory.
+            layer_repr = lyr.URI
+        elif hasattr(lyr, "JSON"):
+            # The input is a feature set.  The JSON representation of the feature set fully defines it.
+            layer_repr = lyr.JSON
+        else:
+            # The input is likely a catalog path, which is returned as a GP value object.  The string representation is
+            # the catalog path.
+            layer_repr = str(lyr)
+        return layer_repr
+
+    lyr_repr1 = get_layer_repr(input_layer_1)
+    lyr_repr2 = get_layer_repr(input_layer_2)
+
+    return lyr_repr1 == lyr_repr2
 
 
 def make_analysis_time_of_day_list(start_day_input, end_day_input, start_time_input, end_time_input, increment_input):

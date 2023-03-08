@@ -13,7 +13,7 @@ window.  The number of reachable destinations can be weighted based on a field,
 such as the number of jobs available at each destination.  The tool also
 calculates the percentage of total destinations reachable.
 
-This script should be launched by the CalculateAccessibilityMatrixInParallel.py
+This script should be launched by the CalculateODMatrixInParallel.py
 script as a subprocess. It computes the OD Cost Matrix in parallel for all time
 increments, chunking the origins and destinations if necessary, and calculates
 the desired statistics on the outputs.
@@ -291,9 +291,11 @@ class ODCostMatrix:  # pylint:disable = too-many-instance-attributes
             try:
                 setattr(self.od_solver, prop, od_props[prop])
             except Exception as ex:  # pylint: disable=broad-except
-                # Suppress warnings for search tolerance for older services (pre 11.0) that don't support locate
-                # settings because we don't want the tool to always throw a warning.
-                if not (self.is_service and prop in ["searchTolerance", "searchToleranceUnits"]):
+                # Suppress warnings for older services (pre 11.0) that don't support locate settings and services
+                # that don't support accumulating attributes because we don't want the tool to always throw a warning.
+                if not (self.is_service and prop in [
+                    "searchTolerance", "searchToleranceUnits", "accumulateAttributeNames"
+                ]):
                     self.logger.warning(
                         f"Failed to set property {prop} from OD config file. Default will be used instead.")
                     self.logger.warning(str(ex))
@@ -444,10 +446,11 @@ class ODCostMatrix:  # pylint:disable = too-many-instance-attributes
         """Save the OD Lines result to a CSV file."""
         self.logger.debug(f"Saving OD cost matrix Lines output to CSV as {out_csv_file}.")
 
-        # For services solve, properly populate OriginOID and DestinationOID fields in the output Lines. Services do
-        # not preserve the original input OIDs, instead resetting from 1, unlike solves using a local network dataset,
-        # so this extra post-processing step is necessary.
-        if self.is_service:
+        # For services solve in pre-3.0 versions of ArcGIS Pro, export Origins and Destinations and properly populate
+        # OriginOID and DestinationOID fields in the output Lines. Services do not preserve the original input OIDs,
+        # instead resetting from 1, unlike solves using a local network dataset.  This issue was handled on the client
+        # side in the ArcGIS Pro 3.1 release, but for older software, this extra post-processing step is necessary.
+        if self.is_service and AnalysisHelpers.arcgis_version < "3.1":
             # Read the Lines output
             with self.solve_result.searchCursor(
                 arcpy.nax.OriginDestinationCostMatrixOutputDataType.Lines, self.output_fields
@@ -550,6 +553,12 @@ class ODCostMatrix:  # pylint:disable = too-many-instance-attributes
             file_handler.setFormatter(formatter)
             logger_obj.addHandler(file_handler)
 
+    def teardown_logger(self):
+        """Clean up and close the logger."""
+        for handler in self.logger.handlers:
+            handler.close()
+            self.logger.removeHandler(handler)
+
 
 def solve_od_cost_matrix(inputs, chunk):
     """Solve an OD Cost Matrix analysis for the given inputs for the given chunk of ObjectIDs.
@@ -570,6 +579,7 @@ def solve_od_cost_matrix(inputs, chunk):
         f"for start time {chunk[2]} as job id {odcm.job_id}"
     ))
     odcm.solve(chunk[0], chunk[1], chunk[2])
+    odcm.teardown_logger()
     return odcm.job_result
 
 
@@ -701,9 +711,7 @@ class ParallelODCalculator():
         finally:
             if odcm:
                 # Close logging and delete the temporary log file
-                for handler in odcm.logger.handlers:
-                    handler.close()
-                    odcm.logger.removeHandler(handler)
+                odcm.teardown_logger()
                 os.remove(odcm.log_file)
 
     @staticmethod
@@ -753,7 +761,7 @@ class ParallelODCalculator():
         self._validate_od_settings()
 
         # Compute OD cost matrix in parallel
-        LOGGER.info("Solving OD Cost Matrix chunks in parallel...")
+        LOGGER.info(f"Solving OD Cost Matrix in parallel ({self.total_jobs} chunks)...")
         completed_jobs = 0  # Track the number of jobs completed so far to use in logging
         # Use the concurrent.futures ProcessPoolExecutor to spin up parallel processes that solve the OD cost
         # matrices

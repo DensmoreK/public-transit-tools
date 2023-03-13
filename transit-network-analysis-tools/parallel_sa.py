@@ -52,6 +52,7 @@ arcpy.env.overwriteOutput = True
 LOG_LEVEL = logging.INFO  # Set to logging.DEBUG to see verbose debug messages
 LOGGER = logging.getLogger(__name__)  # pylint:disable=invalid-name
 LOGGER.setLevel(LOG_LEVEL)
+sys.stdout.reconfigure(encoding="utf-8")
 console_handler = logging.StreamHandler(stream=sys.stdout)
 console_handler.setLevel(LOG_LEVEL)
 # Used by script tool to split message text from message level to add correct message type to GP window
@@ -382,7 +383,7 @@ class ServiceArea:  # pylint:disable = too-many-instance-attributes
         """
         logger_obj.setLevel(logging.DEBUG)
         if len(logger_obj.handlers) <= 1:
-            file_handler = logging.FileHandler(self.log_file)
+            file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
             file_handler.setLevel(logging.DEBUG)
             logger_obj.addHandler(file_handler)
             formatter = logging.Formatter("%(process)d | %(message)s")

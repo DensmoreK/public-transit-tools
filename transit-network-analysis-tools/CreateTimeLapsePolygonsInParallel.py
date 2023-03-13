@@ -339,7 +339,7 @@ class ServiceAreaSolver():  # pylint: disable=too-many-instance-attributes, too-
             # messages from raised exceptions, especially those with tracebacks.
             output, _ = process.communicate()
             if output:
-                out_msgs = output.decode().splitlines()
+                out_msgs = output.decode(encoding="utf-8").splitlines()
                 for msg in out_msgs:
                     AnalysisHelpers.parse_std_and_write_to_gp_ui(msg)
 
